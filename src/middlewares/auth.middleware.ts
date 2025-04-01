@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "../config/env";
-import { isTokenBlacklisted } from "../utils/token";
+import { JWT_SECRET } from "../constants/env";
+import { isTokenBlacklisted } from "../utils/auth.utils";
 import { pool } from "../config/database";
 interface AuthenticatedRequest extends Request {
   user?: {

@@ -11,12 +11,20 @@ export const UserSchema = z.object({
   is_active: z.boolean(),
   created_at: z.date(),
   updated_at: z.date(),
+  user_agent: z.string().nullable().optional(),
 });
 
 export const CreateUserSchema = UserSchema.pick({
   username: true,
   email: true,
   password: true,
+  user_agent: true,
+});
+
+export const SignInUserSchema = UserSchema.pick({
+  email: true,
+  password: true,
+  user_agent: true,
 });
 
 export const UpdateUserSchema = UserSchema.pick({
@@ -30,3 +38,4 @@ export const UpdateUserSchema = UserSchema.pick({
 export type User = z.infer<typeof UserSchema>;
 export type CreateUser = z.infer<typeof CreateUserSchema>;
 export type UpdateUser = z.infer<typeof UpdateUserSchema>;
+export type SignInUser = z.infer<typeof SignInUserSchema>;

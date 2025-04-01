@@ -1,85 +1,45 @@
-import { NextFunction, Request, Response } from "express-serve-static-core";
+import { ErrorRequestHandler, Response } from "express";
+import { INTERNAL_SERVER_ERROR, BAD_REQUEST } from "../constants/http";
+import { z } from "zod";
+import AppError from "../utils/AppError";
+import { clearAuthCookies } from "../utils/cookies";
+import { REFRESH_TOKEN_PATH } from "../utils/cookies";
 
-interface CustomError extends Error {
-  statusCode?: number;
-  code?: string;
-}
+const handleZodError = (res: Response, error: z.ZodError) => {
+  const errors = error.issues.map((err) => ({
+    path: err.path.join("."),
+    message: err.message,
+  }));
 
-const errorMiddleware = (
-  err: CustomError,
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    console.error(err);
-
-    // 기본 에러 상태 코드 설정
-    const statusCode = err.statusCode || 500;
-    const message = err.message || "서버 내부 오류가 발생했습니다.";
-
-    // PostgreSQL 중복 키 에러 처리
-    if (err.code === "23505") {
-      // unique_violation
-      return res.status(400).json({
-        success: false,
-        message: "이미 존재하는 데이터입니다.",
-      });
-    }
-
-    // PostgreSQL 외래 키 제약 조건 위반
-    if (err.code === "23503") {
-      // foreign_key_violation
-      return res.status(400).json({
-        success: false,
-        message: "관련된 데이터가 존재하지 않습니다.",
-      });
-    }
-
-    if (err.code === "42P01") {
-      return res.status(400).json({
-        success: false,
-        message: "테이블이 존재하지 않습니다.",
-      });
-    }
-
-    // PostgreSQL NOT NULL 제약 조건 위반
-    if (err.code === "23502") {
-      // not_null_violation
-      return res.status(400).json({
-        success: false,
-        message: "필수 입력값이 누락되었습니다.",
-      });
-    }
-
-    // JWT 에러 처리
-    if (err.name === "JsonWebTokenError") {
-      return res.status(401).json({
-        success: false,
-        message: "유효하지 않은 토큰입니다.",
-      });
-    }
-
-    if (err.name === "TokenExpiredError") {
-      return res.status(401).json({
-        success: false,
-        message: "만료된 토큰입니다.",
-      });
-    }
-
-    // 일반 에러 응답
-    res.status(statusCode).json({
-      success: false,
-      message,
-      ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
-    });
-  } catch (error) {
-    console.error("Error in error middleware:", error);
-    res.status(500).json({
-      success: false,
-      message: "서버 내부 오류가 발생했습니다.",
-    });
-  }
+  return res.status(BAD_REQUEST).json({
+    errors,
+    message: error.message,
+  });
 };
 
-export default errorMiddleware;
+const handleAppError = (res: Response, error: AppError) => {
+  return res.status(error.statusCode).json({
+    message: error.message,
+    errorCode: error.errorCode,
+  });
+};
+
+const errorHandler: ErrorRequestHandler = ((error, req, res, next) => {
+  console.log(`PATH ${req.path}`, error);
+
+  if (req.path === REFRESH_TOKEN_PATH) {
+    clearAuthCookies(res);
+  }
+
+  if (error instanceof z.ZodError) {
+    return handleZodError(res, error);
+  }
+
+  if (error instanceof AppError) {
+    return handleAppError(res, error);
+  }
+
+  return res.status(INTERNAL_SERVER_ERROR).send("Internal server error");
+}) as unknown as ErrorRequestHandler;
+
+export default errorHandler;

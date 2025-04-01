@@ -1,7 +1,13 @@
 import { Pool } from "pg";
-import { NODE_ENV } from "./env";
+import { NODE_ENV } from "../constants/env";
 
-import { PG_HOST, PG_DATABASE, PG_USER, PG_PASSWORD, PG_PORT } from "./env";
+import {
+  PG_HOST,
+  PG_DATABASE,
+  PG_USER,
+  PG_PASSWORD,
+  PG_PORT,
+} from "../constants/env";
 
 export const pool = new Pool({
   host: PG_HOST,
@@ -17,10 +23,6 @@ export const pool = new Pool({
 export const initPostgresDB = async () => {
   const client = await pool.connect();
   try {
-    // await pool.connect();
-    const result = await client.query(`SELECT * FROM users`);
-    // console.log(result.rows);
-
     console.log(`Database connected successfully in ${NODE_ENV} mode.`);
   } catch (error) {
     console.error("Database connection failed.", error);

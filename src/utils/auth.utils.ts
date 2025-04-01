@@ -1,25 +1,25 @@
 import jwt from "jsonwebtoken";
-import { JWT_SECRET, JWT_REFRESH_SECRET } from "../config/env";
+import { JWT_SECRET, JWT_REFRESH_SECRET } from "../constants/env";
 import redisClient from "../config/redis";
+import { Response } from "express";
+import { CookieOptions } from "express-serve-static-core";
+import { refreshTokenSignOptions, signToken } from "./jwt";
 
-export const generateAccessToken = (userId: string) => {
-  return jwt.sign({ userId: userId }, JWT_SECRET || "secret", {
-    expiresIn: "1h",
-  });
+declare module "express-serve-static-core" {
+  interface Response {
+    clearCookie(name: string, options?: CookieOptions): Response;
+  }
+}
+
+export const generateAccessToken = (userId: string, sessionId: string) => {
+  const accessToken = signToken({ userId, sessionId });
+  return accessToken;
 };
 
-export const generateRefreshToken = (userId: string) => {
-  const refreshToken = jwt.sign(
-    { userId: userId },
-    JWT_REFRESH_SECRET || "secret",
-    { expiresIn: "7d" }
-  );
-
-  // Redis에 리프레시 토큰 저장
-  redisClient.set(
-    `refresh_${userId}`,
-    refreshToken,
-    { EX: 60 * 60 * 24 * 7 } // 7일
+export const generateRefreshToken = (userId: string, sessionId: string) => {
+  const refreshToken = signToken(
+    { userId, sessionId },
+    refreshTokenSignOptions
   );
 
   return refreshToken;
@@ -78,4 +78,44 @@ export const generateCsrfToken = async () => {
   const data = await response.json();
   console.log("generated csrf token ", data);
   return data.csrfToken;
+};
+
+// 세션 설정 함수
+export const setSessionData = ({
+  req,
+  userId,
+  email,
+  username,
+  csrfToken,
+}: {
+  req: any;
+  userId: string;
+  email: string;
+  username: string;
+  csrfToken: string;
+}): void => {
+  if (req.session) {
+    req.session.userId = userId;
+    req.session.email = email;
+    req.session.username = username;
+    req.session.isAuthenticated = true;
+    req.session.csrfToken = csrfToken;
+  }
+};
+
+// 세션 및 쿠키 삭제 함수
+export const clearAuthData = ({
+  req,
+  res,
+}: {
+  req: any;
+  res: Response;
+}): void => {
+  // JWT 쿠키 삭제
+  res.clearCookie("accessToken");
+  res.clearCookie("refreshToken");
+
+  // 세션 삭제
+  req.session?.destroy();
+  res.clearCookie("sid");
 };
