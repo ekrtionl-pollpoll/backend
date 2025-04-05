@@ -1,17 +1,13 @@
 import { Request, Response, NextFunction } from "express";
-import { pool } from "../config/database";
-import {
-  generateAccessToken,
-  verifyRefreshToken,
-  generateCsrfToken,
-  generateRefreshToken,
-} from "../utils/auth.utils";
+import { generateAccessToken, generateRefreshToken } from "../utils/auth.utils";
 import catchError from "../utils/catchError";
 import {
   createUser,
   refreshUserAccessToken,
   signInUser,
   verifyEmailService,
+  sendPasswordResetEmail,
+  resetPasswordService,
 } from "../services/auth.service";
 import { CREATED, OK, UNAUTHORIZED, CONFLICT } from "../constants/http";
 import {
@@ -28,6 +24,8 @@ import {
   signUpSchema,
   signInSchema,
   verificationCodeSchema,
+  emailSchema,
+  resetPasswordSchema,
 } from "../models/auth.schema";
 
 interface AuthenticatedRequest extends Request {
@@ -193,6 +191,42 @@ export const verifyEmail = catchError(
       res.status(OK).json({
         success: true,
         message: "이메일 인증이 완료되었습니다.",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+export const forgotPassword = catchError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const email = emailSchema.parse(req.body.email);
+
+      await sendPasswordResetEmail(email);
+
+      res.status(OK).json({
+        success: true,
+        message: "비밀번호 초기화 이메일을 보냈습니다.",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+export const resetPassword = catchError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const request = resetPasswordSchema.parse(req.body);
+
+      await resetPasswordService(request);
+
+      clearAuthCookies(res);
+
+      res.status(OK).json({
+        success: true,
+        message: "비밀번호가 초기화되었습니다.",
       });
     } catch (error) {
       next(error);

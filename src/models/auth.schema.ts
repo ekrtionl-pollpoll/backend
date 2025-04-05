@@ -20,3 +20,9 @@ export const signInSchema = z.object({
 });
 
 export const verificationCodeSchema = z.string().min(1).max(36);
+export const emailSchema = z.string().email().min(1).max(255);
+export const resetPasswordSchema = z.object({
+  verificationCode: verificationCodeSchema,
+  password: z.string().min(8).max(255),
+});
+
