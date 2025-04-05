@@ -4,10 +4,10 @@ import {
   signIn,
   signOut,
   refreshToken,
+  checkEmailDuplicate,
+  checkUsernameDuplicate,
+  verifyEmail,
 } from "../controllers/auth.controller";
-// import { authenticateToken } from "../middlewares/auth.middleware";
-// import { CreateUserSchema } from "../models/user";
-// import { validate } from "../middlewares/validate.middleware";
 
 const authRouter = Router();
 
@@ -15,7 +15,11 @@ const authRouter = Router();
 authRouter.post("/sign-up", signUp);
 authRouter.post("/sign-in", signIn);
 authRouter.post("/sign-out", signOut);
-// authRouter.post("/refresh", authenticateToken);
 authRouter.post("/refresh", refreshToken);
+
+// check availability of email and username
+authRouter.post("/check/email", checkEmailDuplicate);
+authRouter.post("/check/username", checkUsernameDuplicate);
+authRouter.post("/verify/email/:code", verifyEmail);
 
 export default authRouter;

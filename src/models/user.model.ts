@@ -12,6 +12,7 @@ export const UserSchema = z.object({
   created_at: z.date(),
   updated_at: z.date(),
   user_agent: z.string().nullable().optional(),
+  verified: z.boolean(),
 });
 
 export const CreateUserSchema = UserSchema.pick({

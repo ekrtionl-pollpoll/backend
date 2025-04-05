@@ -12,23 +12,6 @@ const getEnv = (key: string, defaultValue?: string): string => {
   return value;
 };
 
-// export const {
-//   PORT,
-//   FRONTEND_URL,
-//   NODE_ENV,
-//   PG_HOST,
-//   PG_DATABASE,
-//   PG_USER,
-//   PG_PASSWORD,
-//   PG_PORT,
-//   JWT_SECRET,
-//   JWT_REFRESH_SECRET,
-//   JWT_EXPIRES_IN,
-//   JWT_REFRESH_EXPIRES_IN,
-//   ARCJET_KEY,
-//   ARCJET_ENV,
-// } = process.env;
-
 // APP
 export const PORT = getEnv("PORT", "5500");
 export const FRONTEND_URL = getEnv("FRONTEND_URL", "http://localhost:5173");
@@ -56,3 +39,7 @@ export const ARCJET_ENV = getEnv("ARCJET_ENV", "development");
 
 // COOKIE
 export const COOKIE_SECRET = getEnv("COOKIE_SECRET", "cookie-secret");
+
+// RESEND
+export const RESEND_API_KEY = getEnv("RESEND_API_KEY");
+export const EMAIL_SENDER = getEnv("EMAIL_SENDER");

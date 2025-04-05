@@ -1,18 +1,22 @@
 import { pool } from "../config/database";
 import { CreateUser, SignInUser } from "../models/user.model";
-import { sendVerificationEmail } from "../utils/email.utils";
 import {
   comparePassword,
-  createVerificationToken,
   hashPassword,
   isEmailTaken,
   isUsernameTaken,
 } from "../utils/user.utils";
 import { v4 as uuidv4 } from "uuid";
 import appAssert from "../utils/appAssert";
-import AppErrorCode from "../constants/appErrorCode";
-import { CONFLICT, UNAUTHORIZED } from "../constants/http";
+import {
+  CONFLICT,
+  UNAUTHORIZED,
+  NOT_FOUND,
+  INTERNAL_SERVER_ERROR,
+} from "../constants/http";
 import { refreshTokenSignOptions, verifyToken, signToken } from "../utils/jwt";
+import { getVerifyEmailTemplate } from "../utils/emailTemplates";
+import { sendMail } from "../utils/sendMail";
 
 export const createUser = async (data: CreateUser) => {
   const client = await pool.connect();
@@ -26,24 +30,33 @@ export const createUser = async (data: CreateUser) => {
 
     appAssert(!usernameExists, CONFLICT, "사용자 이름이 이미 사용 중입니다.");
 
-    // create user
-    // 트랜잭션 시작
     await client.query("BEGIN");
     const id = uuidv4();
     const hashedPassword = await hashPassword(data.password);
     const userResult = await client.query(
-      `INSERT INTO users (id, email, password, username, profile_image, bio, is_active, created_at, updated_at) 
-       VALUES ($1, $2, $3, $4, null, null, true, NOW(), NOW()) 
+      `INSERT INTO users (id, email, password, username, profile_image, bio, is_active, created_at, updated_at, verified) 
+       VALUES ($1, $2, $3, $4, null, null, true, NOW(), NOW(), false) 
        RETURNING id, email, username, profile_image, bio, is_active, created_at, updated_at`,
       [id, data.email, hashedPassword, data.username]
     );
 
-    // 이메일 인증 토큰 생성
-    // const verificationToken = await createVerificationToken(id);
+    const verificationCode = await client.query(
+      `INSERT INTO verification_codes (user_id, type, expires_at) 
+       VALUES ($1, $2, NOW() + INTERVAL '10 minutes')
+       RETURNING id, user_id, type, expires_at, created_at`,
+      [id, "EMAIL_VERIFICATION"]
+    );
+
+    const url = `${process.env.FRONTEND_URL}/api/v1/auth/check/email/${verificationCode.rows[0].id}`;
+
+    const { error } = await sendMail({
+      to: userResult.rows[0].email,
+      ...getVerifyEmailTemplate(url),
+    });
+
+    appAssert(!error, INTERNAL_SERVER_ERROR, "이메일 전송에 실패했습니다.");
 
     await client.query("COMMIT");
-    // Send verification email
-    // await sendVerificationEmail(data.email, verificationToken);
 
     return userResult.rows[0];
   } catch (error) {
@@ -93,7 +106,7 @@ export const signInUser = async (data: SignInUser) => {
 
     await client.query(
       "INSERT INTO sessions (id, user_id, user_agent, created_at, expires_at) VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '1 days')",
-      [sessionId, user.id, data.user_agent] // userAgent도 저장
+      [sessionId, user.id, data.user_agent]
     );
     await client.query("COMMIT");
 
@@ -127,7 +140,6 @@ export const refreshUserAccessToken = async (refreshToken: string) => {
       "세션이 존재하지 않습니다."
     );
 
-    // refresh the session if it expires in the next 24 hours
     const sessionNeedsRefresh =
       session.rows[0].expires_at.getTime() - Date.now() < 24 * 60 * 60 * 1000;
 
@@ -154,6 +166,56 @@ export const refreshUserAccessToken = async (refreshToken: string) => {
     return {
       accessToken: newAccessToken,
       newRefreshToken: newRefreshToken,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+export const verifyEmailService = async (code: string) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const validCode = await client.query(
+      `SELECT * FROM verification_codes 
+       WHERE id = $1 
+       AND type = 'EMAIL_VERIFICATION' 
+       AND expires_at > NOW()`,
+      [code]
+    );
+
+    appAssert(
+      validCode.rows.length > 0,
+      NOT_FOUND,
+      "유효하지 않거나 만료된 인증 코드입니다."
+    );
+
+    const updatedUser = await client.query(
+      `UPDATE users 
+       SET verified = true 
+       WHERE id = $1 
+       RETURNING id, username, email, profile_image, bio, created_at, updated_at`,
+      [validCode.rows[0].user_id]
+    );
+
+    appAssert(
+      updatedUser.rows.length > 0,
+      INTERNAL_SERVER_ERROR,
+      "이메일 인증에 실패했습니다."
+    );
+
+    await client.query("DELETE FROM verification_codes WHERE id = $1", [
+      validCode.rows[0].id,
+    ]);
+
+    await client.query("COMMIT");
+
+    return {
+      user: updatedUser.rows[0],
     };
   } catch (error) {
     await client.query("ROLLBACK");

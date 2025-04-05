@@ -66,20 +66,3 @@ export const generateVerificationToken = async (
     client.release();
   }
 };
-
-// Create verification token for user
-export const createVerificationToken = async (
-  userId: string
-): Promise<string> => {
-  const token = generateVerificationToken(userId);
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 24); // Token expires in 24 hours
-
-  await pool.query(
-    `INSERT INTO verification_tokens (id, user_id, token, expires_at, created_at) 
-     VALUES ($1, $2, $3, $4, NOW())`,
-    [crypto.randomUUID(), userId, token, expiresAt]
-  );
-
-  return token;
-};
