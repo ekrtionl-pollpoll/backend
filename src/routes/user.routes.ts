@@ -5,15 +5,14 @@ import {
   updateUser,
   deleteUser,
 } from "../controllers/user.controller";
-import { authenticateToken } from "../middlewares/auth.middleware";
 const userRouter = Router();
 
 userRouter.get("/", getUsers);
 
-userRouter.get("/me", authenticateToken, getUser);
+userRouter.get("/me", getUser);
 
-userRouter.put("/me", authenticateToken, updateUser);
+userRouter.put("/me", updateUser);
 
-userRouter.delete("/me", authenticateToken, deleteUser);
+userRouter.delete("/me", deleteUser);
 
 export default userRouter;

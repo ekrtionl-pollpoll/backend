@@ -14,7 +14,7 @@ import crypto from "crypto";
 import errorHandler from "./middlewares/error.middleware";
 import catchError from "./utils/catchError";
 import { configureSessionPostgres } from "./config/session";
-
+import { authenticate } from "./middlewares/auth.middleware";
 // 세션 타입 확장
 declare module "express-session" {
   interface SessionData {
@@ -51,13 +51,13 @@ if (NODE_ENV === "production") {
 // app.use(arcjetMiddleware);
 app.disable("etag");
 // CSRF 보호 설정
-const csrfProtection = csrf({
-  cookie: {
-    httpOnly: false,
-    secure: NODE_ENV === "production",
-    sameSite: "strict",
-  },
-});
+// const csrfProtection = csrf({
+//   cookie: {
+//     httpOnly: false,
+//     secure: NODE_ENV === "production",
+//     sameSite: "strict",
+//   },
+// });
 
 // CSRF 토큰 발급 엔드포인트
 app.get("/api/v1/csrf-token", (req, res) => {
@@ -70,9 +70,8 @@ app.get("/api/v1/csrf-token", (req, res) => {
   res.json({ csrfToken });
 });
 
-// 인증이 필요한 라우트에만 CSRF 보호 적용
 app.use("/api/v1/auth", authRouter);
-app.use("/api/v1/users", csrfProtection, userRouter);
+app.use("/api/v1/users", authenticate, userRouter);
 
 app.get(
   "/abc",

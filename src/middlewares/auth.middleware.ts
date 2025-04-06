@@ -1,8 +1,8 @@
-import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "../constants/env";
-import { isTokenBlacklisted } from "../utils/auth.utils";
-import { pool } from "../config/database";
+import { Request, Response, NextFunction, RequestHandler } from "express";
+import { UNAUTHORIZED } from "../constants/http";
+import appAssert from "../utils/appAssert";
+import AppErrorCode from "../constants/appErrorCode";
+import { verifyToken } from "../utils/jwt";
 interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
@@ -15,59 +15,37 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
-export const authenticateToken = async (
+export const authenticate: RequestHandler = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
-  const client = await pool.connect();
-  const accessToken = req.cookies.accessToken;
-
-  if (!accessToken) {
-    res.status(401).json({
-      success: false,
-      message: "인증 토큰이 필요합니다.",
-    });
-    return;
-  }
-
+) => {
   try {
-    const isBlacklisted = await isTokenBlacklisted(accessToken);
-    if (isBlacklisted) {
-      res.status(401).json({
-        success: false,
-        message: "만료된 세션입니다. 다시 로그인해주세요.",
-      });
-      return;
-    }
+    const accessToken = req.cookies.accessToken as string | undefined;
 
-    const decoded = jwt.verify(accessToken, JWT_SECRET || "secret") as {
-      userId: string;
-    };
+    appAssert(
+      accessToken,
+      UNAUTHORIZED,
+      "인증 토큰이 필요합니다.",
+      AppErrorCode.InvalidAccessToken
+    );
 
-    const user = await client.query(`SELECT * FROM users WHERE id = $1`, [
-      decoded.userId,
-    ]);
+    const { error, payload } = verifyToken(accessToken);
 
-    if (!user.rows[0]) {
-      res.status(401).json({
-        success: false,
-        message: "유효하지 않은 토큰입니다.",
-      });
-      return;
-    }
-    // password를 제외한 사용자 정보만 전달
-    const { password, ...userWithoutPassword } = user.rows[0];
-    console.log(userWithoutPassword);
-    (req as AuthenticatedRequest).user = userWithoutPassword;
+    appAssert(
+      payload,
+      UNAUTHORIZED,
+      error === "jwt expired"
+        ? "만료된 토큰입니다."
+        : "유효하지 않은 토큰입니다.",
+      AppErrorCode.InvalidAccessToken
+    );
+
+    req.userId = payload.userId;
+    req.sessionId = payload.sessionId;
+
     next();
-  } catch (error) {
-    res.status(401).json({
-      success: false,
-      message: "유효하지 않은 토큰입니다.",
-    });
-    return;
-  } finally {
-    client.release();
+  } catch (err) {
+    next(err);
   }
 };
